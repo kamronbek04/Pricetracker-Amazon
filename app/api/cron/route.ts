@@ -59,7 +59,7 @@ export async function GET(request: Request) {
         // Construct emailContent
         const emailContent = await generateEmailBody(
           productInfo,
-          emailNotifType
+          emailNotifType || 'WELCOME'
         );
         // Get array of user emails
         const userEmails = updatedProduct.users.map((user: any) => user.email);
