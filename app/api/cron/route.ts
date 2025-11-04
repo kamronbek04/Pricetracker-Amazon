@@ -68,7 +68,7 @@ export async function GET(request: Request) {
             (user: any) => user.email
           );
           // Send email notification
-          await sendEmail(emailContent, userEmails);
+          await sendEmail(userEmails, emailContent);
         }
 
         return updatedProduct;
