@@ -12,6 +12,7 @@ export async function generateEmailBody(
   product: EmailProductInfo,
   type: NotificationType
 ) {
+  console.log('it is working');
   const THRESHOLD_PERCENTAGE = 40;
   // Shorten the product title
   const shortenedTitle =

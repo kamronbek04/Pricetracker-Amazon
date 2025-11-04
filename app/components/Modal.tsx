@@ -36,7 +36,7 @@ const Modal = ({ productId }: Props) => {
   return (
     <>
       <button className="btn" type="button" onClick={openModal}>
-        Open dialog
+        Start Tracking
       </button>
       <Dialog
         className="dialog-container"

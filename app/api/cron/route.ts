@@ -17,57 +17,89 @@ export const revalidate = 0;
 
 export async function GET(request: Request) {
   try {
-    connectToDB();
-    const products = await Product.find({});
+    await connectToDB();
+    const products = await Product.find({}).populate('users');
 
-    if (!products) throw new Error('No product fetched');
+    if (!products || products.length === 0)
+      throw new Error('No product fetched');
 
     const updatedProducts = await Promise.all(
       products.map(async (currentProduct) => {
-        const scrapedProduct = await scrapeAmazonProduct(currentProduct.url);
+        try {
+          const scrapedProduct = await scrapeAmazonProduct(currentProduct.url);
 
-        if (!scrapedProduct) return;
+          if (!scrapedProduct) return null;
 
-        const updatedPriceHistory = [
-          ...currentProduct.priceHistory,
-          { price: scrapedProduct.currentPrice },
-        ];
+          // ensure priceHistory is an array
+          const prevHistory = Array.isArray(currentProduct.priceHistory)
+            ? currentProduct.priceHistory
+            : [];
 
-        const product = {
-          ...scrapedProduct,
-          priceHistory: updatedPriceHistory,
-          lowestPrice: getLowestPrice(updatedPriceHistory),
-          highestPrice: getHighestPrice(updatedPriceHistory),
-          averagePrice: getAveragePrice(updatedPriceHistory),
-        };
+          const updatedPriceHistory = [
+            ...prevHistory,
+            { price: Number(scrapedProduct.currentPrice) || 0, at: new Date() },
+          ];
 
-        const updatedProduct = await Product.findOneAndUpdate(
-          { url: product.url },
-          product
-        );
+          const productPayload = {
+            ...scrapedProduct,
+            priceHistory: updatedPriceHistory,
+            lowestPrice: getLowestPrice(updatedPriceHistory),
+            highestPrice: getHighestPrice(updatedPriceHistory),
+            averagePrice: getAveragePrice(updatedPriceHistory),
+          };
 
-        const emailNotifType = getEmailNotifType(
-          scrapedProduct,
-          currentProduct
-        );
+          const updatedProduct =
+            (await Product.findOneAndUpdate(
+              { url: productPayload.url },
+              productPayload,
+              {
+                new: true,
+              }
+            )) || null;
 
-        // if (emailNotifType && updatedProduct.users.length > 0) {
-        const productInfo = {
-          title: updatedProduct.title,
-          url: updatedProduct.url,
-        };
-        // Construct emailContent
-        const emailContent = await generateEmailBody(
-          productInfo,
-          emailNotifType || 'WELCOME'
-        );
-        // Get array of user emails
-        const userEmails = updatedProduct.users.map((user: any) => user.email);
-        // Send email notification
-        await sendEmail(userEmails, emailContent);
-        // }
+          const productForNotif = {
+            ...(currentProduct.toObject
+              ? currentProduct.toObject()
+              : currentProduct),
+            priceHistory: updatedPriceHistory,
+          };
 
-        return updatedProduct;
+          const emailNotifType = getEmailNotifType(
+            scrapedProduct,
+            productForNotif
+          );
+
+          // only send emails if we have a recipient list
+          const users = Array.isArray(updatedProduct?.users)
+            ? updatedProduct!.users
+            : [];
+
+          if (emailNotifType && users.length > 0) {
+            const productInfo = {
+              title: updatedProduct!.title,
+              url: updatedProduct!.url,
+            };
+
+            const emailContent = await generateEmailBody(
+              productInfo,
+              emailNotifType as any
+            );
+
+            // send in parallel; catch individual failures so one bad email doesn't fail all
+            await Promise.allSettled(
+              users.map((user: any) =>
+                sendEmail(user.email, emailContent).catch((err) => {
+                  console.error('sendEmail failed for', user.email, err);
+                })
+              )
+            );
+          }
+
+          return updatedProduct;
+        } catch (err) {
+          console.error('Failed to process product', currentProduct.url, err);
+          return null;
+        }
       })
     );
 
