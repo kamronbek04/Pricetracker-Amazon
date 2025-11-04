@@ -30,9 +30,7 @@ export async function GET(request: Request) {
 
         const updatedPriceHistory = [
           ...currentProduct.priceHistory,
-          {
-            price: scrapedProduct.currentPrice,
-          },
+          { price: scrapedProduct.currentPrice },
         ];
 
         const product = {
@@ -53,23 +51,21 @@ export async function GET(request: Request) {
           currentProduct
         );
 
-        if (emailNotifType && updatedProduct.users.length > 0) {
-          const productInfo = {
-            title: updatedProduct.title,
-            url: updatedProduct.url,
-          };
-          // Construct emailContent
-          const emailContent = await generateEmailBody(
-            productInfo,
-            emailNotifType
-          );
-          // Get array of user emails
-          const userEmails = updatedProduct.users.map(
-            (user: any) => user.email
-          );
-          // Send email notification
-          await sendEmail(userEmails, emailContent);
-        }
+        // if (emailNotifType && updatedProduct.users.length > 0) {
+        const productInfo = {
+          title: updatedProduct.title,
+          url: updatedProduct.url,
+        };
+        // Construct emailContent
+        const emailContent = await generateEmailBody(
+          productInfo,
+          emailNotifType
+        );
+        // Get array of user emails
+        const userEmails = updatedProduct.users.map((user: any) => user.email);
+        // Send email notification
+        await sendEmail(userEmails, emailContent);
+        // }
 
         return updatedProduct;
       })
